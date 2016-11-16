@@ -1,0 +1,232 @@
+Gpucaster
+
+Version:        1.35
+Release Date:   25 May 2015
+Author:         Ryan Geiss
+Website:        http://www.geisswerks.com/
+
+REQUIREMENTS:
+  - A Win7 (or later) PC with a beefy GPU.
+  - Some 3D math skills
+  - Basic knowledge of how to edit a pixel shader to make it do math stuff.
+  - [*Optional*] Microsoft Visual C++ 2008 or later (this is a free download)
+      (...You do NOT need this if all you want to do is make new worlds
+          by modifying the "eval.hlsl" pixel shader, which is what most
+          people will likely do.  You only need this if you want to modify 
+          the source code and then rebuild bin/gpucaster.exe.)
+
+DISCLAIMER:
+  This thing barely works.  And the code is an absolute mess.
+
+WHAT IS THIS THING:
+  It renders arbitrary 3D "isofunctions" using a pixel shader.  The mouse
+  controls the camera, and the pixel shader function controls the shape of
+  the world.  The "eval()" function in the main pixel shader (shaders/eval.hlsl) 
+  receives a 3D coordinate as input, and its job is to return a value that
+  is either positive or negative; a positive value means there is something
+  there (rock, surface, whatever); a negative value means there is nothing
+  there (it's open air).  The program takes care of the rendering and 
+  lighting for you.  There are generally 3 phases to the rendering: first,
+  it solves for the surface depths; then the surface normals; and finally,
+  ambient occlusion (a hack for quickly producing semi-realistic lighting).  
+  After that, if you like, you can repeat the 3 phases for a single bounce
+  of reflected rays.  The whole thing runs at interactive rates (normal
+  resolution) or, usually, renders in ~2-30 minutes (for high-resolution
+  stills, say, 20 - 50 megapixels), depending on the complexity of the
+  shader.
+  
+BRIEF TUTORIAL:
+
+1. Run gpucaster_tile_size_32.bat (for now; later, we'll come back to this 
+    step, and find the optimal version for you to run, for best performance).   
+
+2. (Wait for it to load; depending on the contents of shaders/eval.hlsl, it 
+    can take up to a minute or two.)
+
+3. Once it's loaded, the titlebar will start animating - you'll see something 
+    like:
+    "GpuCaster - 1.0 MP - ### x ### - ss:1 - [MAIN] passes:[G=###, A=0] ...o.
+
+4. Use the mouse + left button to rotate the camera.  Use the right button 
+    (and drag up) to zoom in and out a bit.  (Often, the camera starts out 
+    embedded in the fractal surface, and you have to zoom out a little in
+    order to see anything.)  Use CTRL + left mouse button to roll the camera.
+
+5. Each time you move the camera, rendering resets, and you'll see the scene 
+    quickly rebuild itself; the "G=" value in the window title will tell you 
+    how many geometric refinement passes over the scene have been done
+    (since the last camera move or window resize).
+
+6. Go ahead and resize the window now, to the size you want.  Notice how 
+    G=### resets to 0, and starts ticking up again.  It's doing pass after 
+    pass over the scene, trying to refine the depth of the closest 
+    intersection, by testing some random points, and also checking the 
+    (slightly-perturbed) depths of the closest intersection found for 
+    neighbor pixels.
+
+6b. Hit H.  This is the help screen, which tells you all the keyboard 
+    shortcuts.  It'll be handy.   Do a quick scan over it, then go ahead 
+    and dismiss it.
+
+7. Let the G= number get up to about 40 (for a simple scene), then hit N.  
+    Now we're generating surface normals.  If we let the geometry refine 
+    itself enough, then the normals should look nice and smooth (because we
+    are sampling the normals at points that are really on the surface, 
+    rather than slightly embedded inside it).  If you see any sparkly pixels 
+    here, you might want to hit 'G' again, let it refine a while more, and 
+    then hit N again.
+
+8. Once a full pass over the scene is done, in N mode (which is usually 
+    quick), the titlebar will say "[idle]".  
+
+9. At this point, hit A.  This mode is the slowest; it's generating ambient 
+    occlusion rays coming out from each pixel, going in all directions, and 
+    keeping track of what % of these rays (at each pixel) hit something.
+    This information is then used to help in shading.  The scene usually 
+    looks pretty decent after about 10 passes of ambient occlusion rays.
+
+10. Hit ESC to stop, once you're satisfied you have enough ambient occlusion 
+    samples.  
+
+11. Then wait for the titlebar to say "idle" again.  
+
+12. [optional] Now hit 'F'.  You've gone into reflections mode!
+      - Notice how 'G' is going up again.
+      - Let it go to about 40 or so, then do N, then do A; let it go to 10, 
+          then hit ESC to stop it.
+      - You might or might not *see* the reflections yet - it depends on 
+          whether the current surface is reflective or not.  To make it 
+          reflective, see below.
+12b. Now hit F1 or F2 a bunch of times.  You can cycle through the different
+    visualization modes.  (F1 = previous, F2 = next)  Some show the depth,
+    some show frac(depth * 100) (so you can see tiny variations in depth),
+    some show the normals, frac(normals * 100), the ambient occlusion, the 
+    reflectivity, or the final rendered color (recommended).
+
+13. Hit L a few times.  This is randomizing the light locations, directions, 
+    and colors; the fog color and thickness; the surface reflectivity; and 
+    so on.
+
+14. Hit CTRL+L.  The lighting dialog that pops up can be used to refine the 
+    lighting.  You can also load or
+     save the dialog's settings, or the whole scene!
+      - Import lights only: loads the lights (only) from an old saved scene.
+      - Import seed, lights, camera: loads the lights, the random number seed, 
+          and the camera position and orientation from a saved scene.  
+          (**However, note that if eval.hlsl has changed, the scene will
+          no longer look the same.)
+      - Export seed, lights, camera: save everything to a scene file.
+
+15. Also notice the 'Mouse rotates all lights' and 'Mouse moves camera' 
+    buttons.  Click the former to go into a mode where the mouse rotates the 
+    lights (and camera is frozen), and the latter to go back to the normal 
+    mode, where the mouse moves the camera (and resets rendering).
+
+16. Notice how you can play with the lights during rendering, including 
+    rotating them, and it updates at super-fast framerates!
+
+17. The actual geometric surface is defined in shaders/eval.hlsl.  This file 
+    is huge, with tons of old pieces of code disabled using "if 0".  Look near 
+    the very bottom for the latest snippet that is not disabled, and you'll 
+    (likely) see what is producing the current scene.
+    
+    The main idea here is that you give this function ("eval") a point in 3D 
+    space ("float3 ws" for world-space coordinate), and it returns two things:
+       a. ret.density: A float value, which, if positive, identifies solid 
+            material; if negative, identifies air.
+       b. ret.surface_color: A float3 value, identifying the color of the 
+            surface there.  (Note: This only shows up if the 'Surface 
+            coloration' slider in the lighting dialog is cranked up a little.)
+       c. ret.reflectivity: A float value [0..1], identifying how reflective 
+            this point is.  (Note: This only shows up if the 'Reflectivity' 
+            slider in the lighting dialog is cranked up a little.)
+    
+    Also notice the 'ws_pixel_size' value we compute near the top of the 
+    function.  This tells you, at the depth of the point being evaluated, 
+    how large (in world-space) a pixel is.  (This is handy for computing
+    things up until the nyquist limit, but not beyond - to avoid aliasing.)
+       
+    You'll see lots of common tricks in the file.  For example, 
+    "ret.density -= ws.y;" adds a ground plane.  You'll also see lots of use 
+    of functions like RotatePointAboutAxis(), which uses quaternions to rotate 
+    a point about the origin along a given axis (...to rotate about another
+    point, just pre-subtract and post-add that point).  
+    
+    You'll also see use of a function called OctaveNoise.  This function 
+    generates 3D noise for the input coordinate, adding many octaves of noise 
+    together (up to the nyquist limit -- assuming you pass it the proper 
+    ws_pixel_size value).
+        
+    CAUTION: The OctaveNoise function is very powerful, and executes quickly, 
+    BUT compiles very slowly.  Whenever you start the program, it'll take a 
+    bit of time as the shaders compile, and several of them #include eval.hlsl;
+    if it has any active calls to OctaveNoise() in it, the compilation will 
+    slow way down.  
+    
+    After making changes to eval.hlsl, you can hit F5 to reload the shaders; 
+    again, there will be a big pause here while shaders compile.  You usually 
+    then want to hit 'C' to clear the rendering and start over (in non-
+    reflection, geometry-refinement mode).
+
+18. Once you've tweaked eval.hlsl and the lighting and you love your scene, 
+    SAVE IT (using the lighting dialog).  Then hit SHIFT+4.  Notice that the
+    resolution reported in the title bar is now 4x4 times larger than it was.
+    You're rendering a huge print now (so it'll be slower).  The largest you
+    can go is 9x on each axis (SHIFT+9), with a maximized window; but make
+    sure your GPU has plenty of RAM.  If you exceed it, then rendering will
+    suddenly slow way down (as it uses system RAM as a substitute), or it
+    might just crash (depending on the quality of your video driver).  Also
+    note that some graphics cards can't go about a 8192 x 8192 render target,
+    so you might want to stay below that limit.  (That's 64 megapixels, so
+    it should still be plenty.)
+    
+    Hit Z a few times, and watch the area around the mouse cursor; this will 
+    zoom you into 1:1 pixel detail, so you can see if the stage you're 
+    currently rendering is actually finished or not.  
+    
+    When your render is complete, hit CTRL+S to save a screenshot to the 
+    'screenshots' subdirectory.  (Tip: If you also place a copy of rar.exe
+    in the 'bin' directory, then it'll also zip up the current executable, 
+    shaders, etc. and save that alongside the image -- so you'll always 
+    be able to recreate the shot if you want it.)
+    
+    Note that ESC does not exit the program (because doing that on accident
+    can be a major bummer); it just stops the rendering.  To exit, you have 
+    to close the window with ALT+F4 or the 'x' in the upper-right corner.
+
+19. Remember how we launched the program using the 'gpucaster_tile_size_32.bat'
+    file?  Now would be a good time to see if that's a good fit for your GPU
+    or not.  There are a bunch of batch files in the main folder, with
+    different numbers.  The number identifies the size (N) of the N-by-N-pixel 
+    tiles that the program will render, and getting it right can drastically
+    affect shader performance.
+
+    In general, you want to start with a low number, and work your way up.  
+    If you choose a value too low, the rendering speed will be greatly reduced; 
+    however, if you choose a value too high, your system might become very 
+    bogged down and the UI can be slow to respond.  Therefore, start with 
+    small values, and as your system stays highly responsive, try the next 
+    higher value.  If/when the system (overall) begins to feel less responsive, 
+    drop it back down a notch.
+        
+    Good starting guesses (as of January 2014) are:
+    
+        new $500 desktop GPU       tile_size -> 160 (or higher)
+        new $100 desktop GPU       tile_size -> 64
+        good laptop GPU            tile_size -> 32
+        poor laptop GPU            tile_size -> 16
+        
+    ...and for every 2 years after 2014, multiply the value by 2 (up to 256).
+
+20. Have fun!  I'd like to offer my sincere apologies that this thing is 
+    such a mess (the code, shaders, and tutorial); I never really intended 
+    to release it, it was just a fun side project (often worked on in
+    30-minute chunks, mostly throughout 2010).
+
+    Best regards,
+    
+    Ryan Geiss
+    http://www.geisswerks.com/
+        
+        
+   
